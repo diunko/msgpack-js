@@ -1,3 +1,4 @@
+var assert=require("assert")
 exports.encode = function (value) {
   var buffer = new Buffer(sizeof(value));
   encode(value, buffer, 0);
@@ -42,6 +43,13 @@ Decoder.prototype.array = function (length) {
   for (var i = 0; i < length; i++) {
     value[i] = this.parse();
   }
+  return value;
+};
+Decoder.prototype.u64 = function (offt) {
+  var hi=this.buffer.readUInt32BE(offt)
+  var lo=this.buffer.readUInt32BE(offt+4)
+  var value=[lo,hi]
+  value._64=true
   return value;
 };
 Decoder.prototype.parse = function () {
@@ -120,7 +128,8 @@ Decoder.prototype.parse = function () {
     return value;
   // uint64
   case 0xcf:
-    value = this.buffer.readUInt64BE(this.offset + 1);
+    value = this.u64(this.offset + 1);
+    //value = this.buffer.readUInt64BE(this.offset + 1);
     this.offset += 9;
     return value;
   // int 8
@@ -360,8 +369,16 @@ function encode(value, buffer, offset) {
     }
 
     if (isArray) {
-      for (var i = 0; i < length; i++) {
-        size += encode(value[i], buffer, offset + size);
+      if(value._64){
+        assert(value.length===2)
+        buffer[offset] = 0xcf;
+        buffer.writeUInt32BE(value[1],offset+1);//hi
+        buffer.writeUInt32BE(value[0],offset+5);//lo
+        size = 9}
+      else{
+        for (var i = 0; i < length; i++) {
+          size += encode(value[i], buffer, offset + size);
+        }
       }
     }
     else {
@@ -443,6 +460,8 @@ function sizeof(value) {
   if (type === "object") {
     var length, size = 0;
     if (Array.isArray(value)) {
+      if(value._64){
+        return 9}
       length = value.length;
       for (var i = 0; i < length; i++) {
         size += sizeof(value[i]);
